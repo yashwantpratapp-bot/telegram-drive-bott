@@ -10,5 +10,3 @@ services:
       - key: GOOGLE_CREDS_JSON
         sync: false
     plan: free
-    runtime:
-      pythonVersion: "3.10.11"
