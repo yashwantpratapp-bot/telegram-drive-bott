@@ -5,6 +5,7 @@ import io
 import sys
 import types
 import threading
+import asyncio
 
 # ===== FIX FOR PYTHON 3.14 =====
 if 'imghdr' not in sys.modules:
@@ -16,7 +17,7 @@ if 'imghdr' not in sys.modules:
 # ================================
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from config import BOT_TOKEN
 from google_drive import (
     upload_file_to_drive, 
@@ -29,7 +30,7 @@ from google_drive import (
 
 logging.basicConfig(level=logging.INFO)
 
-def start(update, context):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     folder_id = get_or_create_user_folder(user_id)
     context.user_data['folder_id'] = folder_id
@@ -46,7 +47,7 @@ def start(update, context):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    update.message.reply_text(
+    await update.message.reply_text(
         f"👋 *Welcome to Drive Upload Bot!*\n\n"
         f"✅ Your personal Drive folder is ready!\n"
         f"📁 Folder ID: `{folder_id}`\n\n"
@@ -55,9 +56,9 @@ def start(update, context):
         parse_mode='Markdown'
     )
 
-def button_handler(update, context):
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     user_id = update.effective_user.id
     folder_id = context.user_data.get('folder_id')
     
@@ -66,12 +67,12 @@ def button_handler(update, context):
         context.user_data['folder_id'] = folder_id
     
     if query.data == 'upload':
-        query.edit_message_text("📤 Send me the file(s) you want to upload.", parse_mode='Markdown')
+        await query.edit_message_text("📤 Send me the file(s) you want to upload.", parse_mode='Markdown')
     
     elif query.data == 'list':
         files = list_drive_files(folder_id)
         if not files:
-            query.edit_message_text("📭 No files found in your Drive folder.")
+            await query.edit_message_text("📭 No files found in your Drive folder.")
             return
         msg = "📂 *Your Files:*\n\n"
         for i, file in enumerate(files[:15], 1):
@@ -79,22 +80,22 @@ def button_handler(update, context):
             if size != 'Unknown':
                 size = f"{int(size) / 1024:.1f} KB"
             msg += f"{i}. 📄 *{file['name']}*\n   🆔 `{file['id']}`\n   📦 {size}\n\n"
-        query.edit_message_text(msg, parse_mode='Markdown')
+        await query.edit_message_text(msg, parse_mode='Markdown')
     
     elif query.data == 'search':
-        query.edit_message_text("🔍 Send me the filename or keyword to search.")
+        await query.edit_message_text("🔍 Send me the filename or keyword to search.")
         context.user_data['search_mode'] = True
     
     elif query.data == 'folder':
-        query.edit_message_text("📁 Send me the new folder name.\n\n*Example:* `my_photos`", parse_mode='Markdown')
+        await query.edit_message_text("📁 Send me the new folder name.\n\n*Example:* `my_photos`", parse_mode='Markdown')
         context.user_data['folder_mode'] = True
     
     elif query.data == 'rename':
-        query.edit_message_text("✏️ Send me the file ID and new name.\n\n*Format:* `file_id new_name`", parse_mode='Markdown')
+        await query.edit_message_text("✏️ Send me the file ID and new name.\n\n*Format:* `file_id new_name`", parse_mode='Markdown')
         context.user_data['rename_mode'] = True
     
     elif query.data == 'delete':
-        query.edit_message_text("🗑️ Send me the file ID to delete.\n\n*Example:* `1abc2def`", parse_mode='Markdown')
+        await query.edit_message_text("🗑️ Send me the file ID to delete.\n\n*Example:* `1abc2def`", parse_mode='Markdown')
         context.user_data['delete_mode'] = True
     
     elif query.data == 'help':
@@ -126,15 +127,15 @@ def button_handler(update, context):
 /delete - Delete file
 /cancel - Cancel operation
         """
-        query.edit_message_text(help_text, parse_mode='Markdown')
+        await query.edit_message_text(help_text, parse_mode='Markdown')
     
     elif query.data == 'cancel':
         context.user_data.clear()
         folder_id = get_or_create_user_folder(user_id)
         context.user_data['folder_id'] = folder_id
-        query.edit_message_text("✅ All operations cancelled. Use /start for main menu.")
+        await query.edit_message_text("✅ All operations cancelled. Use /start for main menu.")
 
-def handle_documents(update, context):
+async def handle_documents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     folder_id = context.user_data.get('folder_id')
     
@@ -145,7 +146,7 @@ def handle_documents(update, context):
     doc = update.message.document or update.message.photo or update.message.video or update.message.audio
     
     if not doc:
-        update.message.reply_text("❌ Please send a valid file.")
+        await update.message.reply_text("❌ Please send a valid file.")
         return
     
     if update.message.document:
@@ -161,20 +162,20 @@ def handle_documents(update, context):
         file = update.message.audio
         file_name = f"audio_{int(time.time())}.mp3"
     else:
-        update.message.reply_text("❌ Unsupported file type.")
+        await update.message.reply_text("❌ Unsupported file type.")
         return
     
     if file.file_size > 50 * 1024 * 1024:
-        update.message.reply_text("❌ File too large! Maximum 50MB allowed.")
+        await update.message.reply_text("❌ File too large! Maximum 50MB allowed.")
         return
     
-    status_msg = update.message.reply_text(f"⏳ Starting upload of *{file_name}*...", parse_mode='Markdown')
+    status_msg = await update.message.reply_text(f"⏳ Starting upload of *{file_name}*...", parse_mode='Markdown')
     
     try:
-        file_obj = file.get_file()
+        file_obj = await file.get_file()
         
         file_data = io.BytesIO()
-        file_obj.download_to_memory(file_data)
+        await file_obj.download_to_memory(file_data)
         file_data.seek(0)
         
         file_path = f"downloads/{file_name}"
@@ -182,13 +183,13 @@ def handle_documents(update, context):
         with open(file_path, 'wb') as f:
             f.write(file_data.getvalue())
         
-        status_msg.edit_text(f"⏳ Uploading *{file_name}* to Drive...\n[████████████] 100%", parse_mode='Markdown')
+        await status_msg.edit_text(f"⏳ Uploading *{file_name}* to Drive...\n[████████████] 100%", parse_mode='Markdown')
         
         file_id, link = upload_file_to_drive(file_path, folder_id)
         
         os.remove(file_path)
         
-        status_msg.edit_text(
+        await status_msg.edit_text(
             f"✅ *Upload Successful!*\n\n"
             f"📄 File: `{file_name}`\n"
             f"🆔 ID: `{file_id}`\n"
@@ -199,9 +200,9 @@ def handle_documents(update, context):
         )
         
     except Exception as e:
-        status_msg.edit_text(f"❌ Upload failed: {str(e)}")
+        await status_msg.edit_text(f"❌ Upload failed: {str(e)}")
 
-def handle_text(update, context):
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_id = update.effective_user.id
     folder_id = context.user_data.get('folder_id')
@@ -214,23 +215,23 @@ def handle_text(update, context):
         files = search_drive_files(text, folder_id)
         context.user_data['search_mode'] = False
         if not files:
-            update.message.reply_text(f"🔍 No files found with: *{text}*", parse_mode='Markdown')
+            await update.message.reply_text(f"🔍 No files found with: *{text}*", parse_mode='Markdown')
             return
         msg = f"🔍 *Search Results for '{text}':*\n\n"
         for file in files[:10]:
             msg += f"📄 {file['name']}\n   🆔 `{file['id']}`\n\n"
-        update.message.reply_text(msg, parse_mode='Markdown')
+        await update.message.reply_text(msg, parse_mode='Markdown')
     
     elif context.user_data.get('folder_mode'):
         new_folder_id = get_or_create_user_folder(f"{user_id}_{text}")
         context.user_data['folder_id'] = new_folder_id
         context.user_data['folder_mode'] = False
-        update.message.reply_text(f"✅ Folder changed to: *{text}*\n📁 ID: `{new_folder_id}`", parse_mode='Markdown')
+        await update.message.reply_text(f"✅ Folder changed to: *{text}*\n📁 ID: `{new_folder_id}`", parse_mode='Markdown')
     
     elif context.user_data.get('rename_mode'):
         parts = text.split(' ', 1)
         if len(parts) < 2:
-            update.message.reply_text("❌ Format: `file_id new_name`", parse_mode='Markdown')
+            await update.message.reply_text("❌ Format: `file_id new_name`", parse_mode='Markdown')
             context.user_data['rename_mode'] = False
             return
         file_id = parts[0]
@@ -238,25 +239,25 @@ def handle_text(update, context):
         try:
             result = rename_drive_file(file_id, new_name)
             context.user_data['rename_mode'] = False
-            update.message.reply_text(f"✅ File renamed to: *{result}*", parse_mode='Markdown')
+            await update.message.reply_text(f"✅ File renamed to: *{result}*", parse_mode='Markdown')
         except Exception as e:
-            update.message.reply_text(f"❌ Rename failed: {str(e)}")
+            await update.message.reply_text(f"❌ Rename failed: {str(e)}")
     
     elif context.user_data.get('delete_mode'):
         file_id = text.strip()
         try:
             delete_drive_file(file_id)
             context.user_data['delete_mode'] = False
-            update.message.reply_text(f"✅ File with ID `{file_id}` deleted successfully!", parse_mode='Markdown')
+            await update.message.reply_text(f"✅ File with ID `{file_id}` deleted successfully!", parse_mode='Markdown')
         except Exception as e:
-            update.message.reply_text(f"❌ Delete failed: {str(e)}")
+            await update.message.reply_text(f"❌ Delete failed: {str(e)}")
 
-def cancel(update, context):
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     user_id = update.effective_user.id
     folder_id = get_or_create_user_folder(user_id)
     context.user_data['folder_id'] = folder_id
-    update.message.reply_text("✅ All operations cancelled. Use /start for main menu.")
+    await update.message.reply_text("✅ All operations cancelled. Use /start for main menu.")
 
 def main():
     # Start Flask server in background for Render health checks
@@ -283,21 +284,19 @@ def main():
         print(f"⚠️ Web server not started: {e}")
     
     # Start Telegram bot
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    app = Application.builder().token(BOT_TOKEN).build()
     
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("cancel", cancel))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("cancel", cancel))
     
-    dp.add_handler(MessageHandler(Filters.document | Filters.photo | Filters.video | Filters.audio, handle_documents))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_text))
+    app.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO | filters.AUDIO, handle_documents))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     
-    dp.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(CallbackQueryHandler(button_handler))
     
     print("🤖 Bot is running... Press Ctrl+C to stop")
     print("✅ All features ready!")
-    updater.start_polling()
-    updater.idle()
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
     main()
