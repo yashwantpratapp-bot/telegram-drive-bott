@@ -1,5 +1,6 @@
 import os
 import pickle
+import base64
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -10,17 +11,30 @@ SCOPES = ['https://www.googleapis.com/auth/drive']
 def authenticate_google_drive():
     creds = None
     
-    # Check if token.pickle exists
+    # Check if token.pickle exists locally
     if os.path.exists('token.pickle'):
         with open('token.pickle', 'rb') as token:
             creds = pickle.load(token)
     else:
-        raise Exception("token.pickle not found! Please generate it locally first.")
+        # Load from environment variable (Base64 encoded)
+        token_b64 = os.environ.get('TOKEN_PICKLE_B64')
+        if token_b64:
+            try:
+                token_data = base64.b64decode(token_b64)
+                creds = pickle.loads(token_data)
+                # Save for next time
+                with open('token.pickle', 'wb') as f:
+                    f.write(token_data)
+                print("✅ Loaded token from environment variable")
+            except Exception as e:
+                print(f"❌ Error loading token from env: {e}")
+                raise Exception("Invalid TOKEN_PICKLE_B64 environment variable")
+        else:
+            raise Exception("token.pickle not found! Set TOKEN_PICKLE_B64 environment variable.")
     
     # If credentials expired, refresh
     if creds and creds.expired and creds.refresh_token:
         creds.refresh(Request())
-        # Save refreshed credentials
         with open('token.pickle', 'wb') as token:
             pickle.dump(creds, token)
     
