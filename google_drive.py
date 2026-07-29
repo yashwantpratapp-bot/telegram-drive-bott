@@ -9,33 +9,35 @@ from googleapiclient.http import MediaFileUpload
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
-def get_credentials_from_env():
-    """Render pe environment variable se credentials load karein"""
-    creds_json = os.environ.get('GOOGLE_CREDS_JSON')
-    if creds_json:
-        creds_dict = json.loads(creds_json)
-        # Create credentials object from dict
-        from google.oauth2.credentials import Credentials
-        return Credentials.from_authorized_user_info(info=creds_dict)
-    return None
-
 def authenticate_google_drive():
     creds = None
     
-    # Pehle local token.pickle check karo
+    # Check if token.pickle exists
     if os.path.exists('token.pickle'):
         with open('token.pickle', 'rb') as token:
             creds = pickle.load(token)
     
-    # Agar credentials nahi hai, toh environment se load karo
-    if not creds:
-        creds = get_credentials_from_env()
-    
-    # Agar ab bhi nahi hai, toh normal flow use karo
-    if not creds:
-        flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
-        creds = flow.run_local_server(port=0)
+    # If no valid credentials, create from environment or file
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            # Try to load from environment variable
+            creds_json = os.environ.get('GOOGLE_CREDS_JSON')
+            if creds_json:
+                # Save credentials to file
+                with open('credentials.json', 'w') as f:
+                    f.write(creds_json)
+            
+            # Load from file
+            if os.path.exists('credentials.json'):
+                flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+                # For Render - use no browser mode
+                creds = flow.run_local_server(port=0, open_browser=False)
+            else:
+                raise Exception("credentials.json not found. Please set GOOGLE_CREDS_JSON environment variable.")
         
+        # Save credentials for next run
         with open('token.pickle', 'wb') as token:
             pickle.dump(creds, token)
     
