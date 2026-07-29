@@ -1,4 +1,6 @@
 import os
+import sys
+import types
 import logging
 import time
 import io
@@ -14,6 +16,13 @@ from google_drive import (
     rename_drive_file,
     get_or_create_user_folder
 )
+
+# ===== FIX FOR PYTHON 3.14 / imghdr missing =====
+if 'imghdr' not in sys.modules:
+    imghdr = types.ModuleType('imghdr')
+    imghdr.what = lambda f, h=None: None
+    sys.modules['imghdr'] = imghdr
+# ================================================
 
 app = Flask(__name__)
 bot = Bot(token=BOT_TOKEN)
