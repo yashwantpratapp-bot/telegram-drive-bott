@@ -6,7 +6,7 @@ services:
     startCommand: python bot.py
     envVars:
       - key: PYTHON_VERSION
-        value: 3.13.5
+        value: 3.10.14
       - key: BOT_TOKEN
         sync: false
       - key: TOKEN_PICKLE_B64
