@@ -1,41 +1,27 @@
 import os
-import pickle
-import base64
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
+import json
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
 def authenticate_google_drive():
-    creds = None
-    
-    # 1. Pehle environment variable se token load karo (Base64)
-    token_b64 = os.environ.get('TOKEN_PICKLE_B64')
-    if token_b64:
-        try:
-            token_data = base64.b64decode(token_b64)
-            creds = pickle.loads(token_data)
-            print("✅ Loaded token from environment variable")
-        except Exception as e:
-            print(f"⚠️ Error loading token: {e}")
-    
-    # 2. Agar environment se nahi mila toh token.pickle check karo
-    if not creds and os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
-        print("✅ Loaded token from token.pickle file")
-    
-    # 3. Agar credentials expired hain toh refresh karo
-    if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        # Save refreshed token as Base64 in environment (for next time)
-        token_b64_new = base64.b64encode(pickle.dumps(creds)).decode()
-        print("✅ Refreshed token")
-    
-    if not creds:
-        raise Exception("❌ No valid credentials found! Set TOKEN_PICKLE_B64 environment variable.")
+    # Service account JSON se credentials load karo
+    creds_json = os.environ.get('SERVICE_ACCOUNT_JSON')
+    if creds_json:
+        # Environment variable se load
+        creds_info = json.loads(creds_json)
+        creds = service_account.Credentials.from_service_account_info(
+            creds_info, scopes=SCOPES
+        )
+    else:
+        # File se load (local testing ke liye)
+        with open('service-account-key.json', 'r') as f:
+            creds_info = json.load(f)
+        creds = service_account.Credentials.from_service_account_info(
+            creds_info, scopes=SCOPES
+        )
     
     return build('drive', 'v3', credentials=creds)
 
