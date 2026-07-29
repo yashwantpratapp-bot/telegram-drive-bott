@@ -1,12 +1,14 @@
 services:
-  - type: worker
+  - type: web
     name: telegram-drive-bot
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
-    plan: free
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
       - key: BOT_TOKEN
         sync: false
-      - key: GOOGLE_CREDS_JSON
+      - key: TOKEN_PICKLE_B64
         sync: false
+    plan: free
