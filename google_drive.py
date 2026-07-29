@@ -1,9 +1,7 @@
 import os
-import json
 import pickle
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
@@ -16,28 +14,13 @@ def authenticate_google_drive():
     if os.path.exists('token.pickle'):
         with open('token.pickle', 'rb') as token:
             creds = pickle.load(token)
+    else:
+        raise Exception("token.pickle not found! Please generate it locally first.")
     
-    # If no valid credentials, create from environment or file
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            # Try to load from environment variable
-            creds_json = os.environ.get('GOOGLE_CREDS_JSON')
-            if creds_json:
-                # Save credentials to file
-                with open('credentials.json', 'w') as f:
-                    f.write(creds_json)
-            
-            # Load from file
-            if os.path.exists('credentials.json'):
-                flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
-                # For Render - use no browser mode
-                creds = flow.run_local_server(port=0, open_browser=False)
-            else:
-                raise Exception("credentials.json not found. Please set GOOGLE_CREDS_JSON environment variable.")
-        
-        # Save credentials for next run
+    # If credentials expired, refresh
+    if creds and creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+        # Save refreshed credentials
         with open('token.pickle', 'wb') as token:
             pickle.dump(creds, token)
     
