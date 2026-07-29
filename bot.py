@@ -2,8 +2,9 @@ import os
 import logging
 import time
 import io
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
+import sys
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler
 from config import BOT_TOKEN
 from google_drive import (
     upload_file_to_drive, 
@@ -13,6 +14,18 @@ from google_drive import (
     rename_drive_file,
     get_or_create_user_folder
 )
+
+# Fix for Python 3.14 - imghdr workaround
+try:
+    import imghdr
+except ImportError:
+    # Create a dummy imghdr module
+    import types
+    imghdr = types.ModuleType('imghdr')
+    def what(file, h=None):
+        return None
+    imghdr.what = what
+    sys.modules['imghdr'] = imghdr
 
 logging.basicConfig(level=logging.INFO)
 
