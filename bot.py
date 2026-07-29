@@ -4,6 +4,7 @@ import time
 import io
 import sys
 import types
+import threading
 
 # ===== FIX FOR PYTHON 3.14 =====
 if 'imghdr' not in sys.modules:
@@ -172,12 +173,10 @@ def handle_documents(update, context):
     try:
         file_obj = file.get_file()
         
-        # Download to memory
         file_data = io.BytesIO()
         file_obj.download_to_memory(file_data)
         file_data.seek(0)
         
-        # Temp save
         file_path = f"downloads/{file_name}"
         os.makedirs("downloads", exist_ok=True)
         with open(file_path, 'wb') as f:
@@ -260,21 +259,43 @@ def cancel(update, context):
     update.message.reply_text("✅ All operations cancelled. Use /start for main menu.")
 
 def main():
+    # Start Flask server in background for Render health checks
+    try:
+        from flask import Flask
+        app_flask = Flask(__name__)
+        
+        @app_flask.route('/')
+        def health_check():
+            return "Bot is running!", 200
+        
+        @app_flask.route('/health')
+        def health():
+            return "OK", 200
+        
+        def run_flask():
+            app_flask.run(host='0.0.0.0', port=8080)
+        
+        flask_thread = threading.Thread(target=run_flask)
+        flask_thread.daemon = True
+        flask_thread.start()
+        print("🌐 Web server started on port 8080")
+    except Exception as e:
+        print(f"⚠️ Web server not started: {e}")
+    
+    # Start Telegram bot
     updater = Updater(BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     
-    # Command handlers
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("cancel", cancel))
     
-    # Message handlers
     dp.add_handler(MessageHandler(Filters.document | Filters.photo | Filters.video | Filters.audio, handle_documents))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_text))
     
-    # Callback handlers
     dp.add_handler(CallbackQueryHandler(button_handler))
     
     print("🤖 Bot is running... Press Ctrl+C to stop")
+    print("✅ All features ready!")
     updater.start_polling()
     updater.idle()
 
