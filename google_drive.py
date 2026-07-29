@@ -11,32 +11,31 @@ SCOPES = ['https://www.googleapis.com/auth/drive']
 def authenticate_google_drive():
     creds = None
     
-    # Check if token.pickle exists locally
-    if os.path.exists('token.pickle'):
+    # 1. Pehle environment variable se token load karo (Base64)
+    token_b64 = os.environ.get('TOKEN_PICKLE_B64')
+    if token_b64:
+        try:
+            token_data = base64.b64decode(token_b64)
+            creds = pickle.loads(token_data)
+            print("✅ Loaded token from environment variable")
+        except Exception as e:
+            print(f"⚠️ Error loading token: {e}")
+    
+    # 2. Agar environment se nahi mila toh token.pickle check karo
+    if not creds and os.path.exists('token.pickle'):
         with open('token.pickle', 'rb') as token:
             creds = pickle.load(token)
-    else:
-        # Load from environment variable (Base64 encoded)
-        token_b64 = os.environ.get('TOKEN_PICKLE_B64')
-        if token_b64:
-            try:
-                token_data = base64.b64decode(token_b64)
-                creds = pickle.loads(token_data)
-                # Save for next time
-                with open('token.pickle', 'wb') as f:
-                    f.write(token_data)
-                print("✅ Loaded token from environment variable")
-            except Exception as e:
-                print(f"❌ Error loading token from env: {e}")
-                raise Exception("Invalid TOKEN_PICKLE_B64 environment variable")
-        else:
-            raise Exception("token.pickle not found! Set TOKEN_PICKLE_B64 environment variable.")
+        print("✅ Loaded token from token.pickle file")
     
-    # If credentials expired, refresh
+    # 3. Agar credentials expired hain toh refresh karo
     if creds and creds.expired and creds.refresh_token:
         creds.refresh(Request())
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
+        # Save refreshed token as Base64 in environment (for next time)
+        token_b64_new = base64.b64encode(pickle.dumps(creds)).decode()
+        print("✅ Refreshed token")
+    
+    if not creds:
+        raise Exception("❌ No valid credentials found! Set TOKEN_PICKLE_B64 environment variable.")
     
     return build('drive', 'v3', credentials=creds)
 
