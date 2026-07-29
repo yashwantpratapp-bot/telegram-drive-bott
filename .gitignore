@@ -1,7 +1,6 @@
-*.pyc
-__pycache__/
-downloads/
 credentials.json
-token.pickle
+downloads/
+__pycache__/
+*.pyc
 .env
-.venv/
+.vscode/
